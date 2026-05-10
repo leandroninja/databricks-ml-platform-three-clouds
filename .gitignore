@@ -1,0 +1,111 @@
+# =============================================
+# Python
+# =============================================
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg
+*.egg-info/
+dist/
+build/
+*.whl
+.eggs/
+.pytest_cache/
+.coverage
+htmlcov/
+.hypothesis/
+*.pyc
+
+# ambientes virtuais
+.venv/
+venv/
+env/
+.env
+.env.*
+
+# notebooks Jupyter (se exportados)
+.ipynb_checkpoints/
+*.ipynb
+
+# =============================================
+# Terraform
+# =============================================
+.terraform/
+.terraform.lock.hcl
+terraform.tfstate
+terraform.tfstate.backup
+terraform.tfstate.d/
+*.tfvars
+*.tfvars.json
+*.auto.tfvars
+!*.tfvars.example
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+crash.log
+crash.*.log
+
+# arquivos de variáveis gerados pelo bootstrap (contêm credenciais)
+terraform/azure/.env.*
+terraform/aws/.env.*
+terraform/gcp/.env.*
+terraform/gcp/sa-key-*.json
+
+# =============================================
+# Databricks
+# =============================================
+.databricks/
+.databrickscfg
+databricks.yml.local
+
+# =============================================
+# IDE e editores
+# =============================================
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# =============================================
+# Credenciais e segredos — NUNCA commitar
+# =============================================
+*.pem
+*.key
+*.p12
+*.pfx
+credentials.json
+*service_account*.json
+.env.local
+.env.*.local
+secrets/
+secret.yaml
+secret.yml
+
+# =============================================
+# Logs e dados temporários
+# =============================================
+*.log
+*.tmp
+*.temp
+/tmp/
+/temp/
+
+# =============================================
+# Delta Lake / Spark local (para testes)
+# =============================================
+spark-warehouse/
+derby.log
+metastore_db/
+checkpoint/
+
+# =============================================
+# MLflow local
+# =============================================
+mlruns/
+mlartifacts/

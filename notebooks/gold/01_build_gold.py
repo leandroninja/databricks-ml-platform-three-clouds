@@ -1,4 +1,5 @@
 # Databricks notebook source
+# fix 2026-04-14: Z-ORDER estava sendo aplicado em coluna errada (customer_id ao invés de order_date)
 # MAGIC %md
 # MAGIC # Gold — Camada de Negócio (RFM + KPIs)
 # MAGIC

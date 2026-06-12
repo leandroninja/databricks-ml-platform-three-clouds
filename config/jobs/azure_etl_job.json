@@ -1,0 +1,195 @@
+{
+  "name": "etl-pipeline-azure-prod",
+  "description": "Pipeline ETL completo no Azure: Bronze → Silver → Gold → ML → Evaluate",
+  "tags": {
+    "cloud": "azure",
+    "environment": "prod",
+    "team": "data-platform"
+  },
+  "email_notifications": {
+    "on_failure": ["leandro.moraes@empresa.com", "data-team-alerts@empresa.com"],
+    "on_success": [],
+    "no_alert_for_skipped_runs": true
+  },
+  "notification_settings": {
+    "no_alert_for_canceled_runs": false,
+    "no_alert_for_skipped_runs": true
+  },
+  "schedule": {
+    "quartz_cron_expression": "0 0 6 * * ?",
+    "timezone_id": "America/Sao_Paulo",
+    "pause_status": "UNPAUSED"
+  },
+  "max_concurrent_runs": 1,
+  "timeout_seconds": 14400,
+  "tasks": [
+    {
+      "task_key": "ingest_bronze",
+      "description": "Ingestão incremental Bronze (Auto Loader ADLS Gen2)",
+      "notebook_task": {
+        "notebook_path": "/Repos/leandro.moraes/databricks-ml-platform/notebooks/bronze/01_ingest_azure",
+        "base_parameters": {
+          "storage_account": "stleandroprod01",
+          "container":       "raw",
+          "source_folder":   "transacoes/",
+          "catalog":         "lakehouse_prod",
+          "schema_bronze":   "bronze",
+          "tabela_destino":  "transacoes_raw"
+        },
+        "source": "WORKSPACE"
+      },
+      "job_cluster_key": "cluster_spot_small",
+      "timeout_seconds": 3600,
+      "retry_on_timeout": false,
+      "max_retries": 2,
+      "min_retry_interval_millis": 300000
+    },
+    {
+      "task_key": "cleanse_silver",
+      "description": "Limpeza e SCD Type 2 — camada Silver",
+      "depends_on": [
+        { "task_key": "ingest_bronze" }
+      ],
+      "notebook_task": {
+        "notebook_path": "/Repos/leandro.moraes/databricks-ml-platform/notebooks/silver/01_cleanse_transform",
+        "base_parameters": {
+          "catalog":         "lakehouse_prod",
+          "schema_bronze":   "bronze",
+          "schema_silver":   "silver",
+          "tabela_bronze":   "transacoes_raw",
+          "tabela_silver":   "transacoes"
+        },
+        "source": "WORKSPACE"
+      },
+      "job_cluster_key": "cluster_spot_medium",
+      "timeout_seconds": 3600,
+      "max_retries": 1,
+      "min_retry_interval_millis": 600000
+    },
+    {
+      "task_key": "build_gold",
+      "description": "Agrega camada Gold — RFM + KPIs + Receita diária",
+      "depends_on": [
+        { "task_key": "cleanse_silver" }
+      ],
+      "notebook_task": {
+        "notebook_path": "/Repos/leandro.moraes/databricks-ml-platform/notebooks/gold/01_build_gold",
+        "base_parameters": {
+          "catalog":       "lakehouse_prod",
+          "schema_silver": "silver",
+          "schema_gold":   "gold"
+        },
+        "source": "WORKSPACE"
+      },
+      "job_cluster_key": "cluster_spot_medium",
+      "timeout_seconds": 3600,
+      "max_retries": 1,
+      "min_retry_interval_millis": 300000
+    },
+    {
+      "task_key": "data_quality",
+      "description": "Verificações de qualidade Great Expectations",
+      "depends_on": [
+        { "task_key": "build_gold" }
+      ],
+      "notebook_task": {
+        "notebook_path": "/Repos/leandro.moraes/databricks-ml-platform/notebooks/data_quality/01_dq_checks",
+        "base_parameters": {
+          "catalog":       "lakehouse_prod",
+          "threshold_pct": "95"
+        },
+        "source": "WORKSPACE"
+      },
+      "job_cluster_key": "cluster_spot_small",
+      "timeout_seconds": 1800,
+      "max_retries": 0
+    },
+    {
+      "task_key": "train_ml",
+      "description": "Treino do modelo de churn (condicional — só roda se DQ ok)",
+      "depends_on": [
+        { "task_key": "data_quality" }
+      ],
+      "condition_task": {
+        "op": "EQUAL_TO",
+        "left": "{{tasks.data_quality.values.dq_status}}",
+        "right": "OK"
+      },
+      "notebook_task": {
+        "notebook_path": "/Repos/leandro.moraes/databricks-ml-platform/notebooks/ml/01_train_churn_model",
+        "base_parameters": {
+          "catalog":          "lakehouse_prod",
+          "schema_gold":      "gold",
+          "max_trials":       "30",
+          "modelo_nome":      "churn_predictor"
+        },
+        "source": "WORKSPACE"
+      },
+      "job_cluster_key": "cluster_ml",
+      "timeout_seconds": 7200,
+      "max_retries": 0
+    }
+  ],
+  "job_clusters": [
+    {
+      "job_cluster_key": "cluster_spot_small",
+      "new_cluster": {
+        "spark_version":    "14.3.x-scala2.12",
+        "node_type_id":     "Standard_DS3_v2",
+        "num_workers":      2,
+        "azure_attributes": {
+          "availability":       "SPOT_WITH_FALLBACK_AZURE",
+          "spot_bid_max_price": 100,
+          "first_on_demand":    1
+        },
+        "spark_conf": {
+          "spark.databricks.delta.preview.enabled":  "true",
+          "spark.sql.adaptive.enabled":              "true",
+          "spark.sql.adaptive.coalescePartitions.enabled": "true"
+        },
+        "custom_tags": {
+          "JobType": "etl-batch",
+          "CostCenter": "data-platform"
+        }
+      }
+    },
+    {
+      "job_cluster_key": "cluster_spot_medium",
+      "new_cluster": {
+        "spark_version":    "14.3.x-scala2.12",
+        "node_type_id":     "Standard_DS4_v2",
+        "num_workers":      4,
+        "azure_attributes": {
+          "availability":       "SPOT_WITH_FALLBACK_AZURE",
+          "spot_bid_max_price": 100,
+          "first_on_demand":    1
+        },
+        "spark_conf": {
+          "spark.databricks.delta.preview.enabled": "true",
+          "spark.sql.adaptive.enabled":             "true"
+        },
+        "custom_tags": {
+          "JobType": "etl-batch-medium"
+        }
+      }
+    },
+    {
+      "job_cluster_key": "cluster_ml",
+      "new_cluster": {
+        "spark_version":    "14.3.x-cpu-ml-scala2.12",
+        "node_type_id":     "Standard_DS5_v2",
+        "num_workers":      4,
+        "azure_attributes": {
+          "availability":       "ON_DEMAND_AZURE"
+        },
+        "spark_conf": {
+          "spark.databricks.delta.preview.enabled": "true"
+        },
+        "custom_tags": {
+          "JobType": "ml-training"
+        }
+      }
+    }
+  ],
+  "format": "MULTI_TASK"
+}

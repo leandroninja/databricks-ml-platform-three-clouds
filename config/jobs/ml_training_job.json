@@ -1,0 +1,132 @@
+{
+  "name": "ml-training-churn-gpu",
+  "description": "Job dedicado de treinamento ML com GPU — roda semanalmente com dataset completo",
+  "tags": {
+    "cloud": "azure",
+    "environment": "prod",
+    "team": "ml-engineering",
+    "model": "churn-predictor"
+  },
+  "email_notifications": {
+    "on_failure": ["leandro.moraes@empresa.com", "ml-team@empresa.com"],
+    "on_success": ["ml-team@empresa.com"],
+    "no_alert_for_skipped_runs": false
+  },
+  "schedule": {
+    "quartz_cron_expression": "0 0 2 ? * SUN",
+    "timezone_id": "America/Sao_Paulo",
+    "pause_status": "UNPAUSED"
+  },
+  "max_concurrent_runs": 1,
+  "timeout_seconds": 21600,
+  "tasks": [
+    {
+      "task_key": "prepare_features",
+      "description": "Preparação do feature store para treino completo",
+      "notebook_task": {
+        "notebook_path": "/Repos/leandro.moraes/databricks-ml-platform/notebooks/gold/01_build_gold",
+        "base_parameters": {
+          "catalog":       "lakehouse_prod",
+          "schema_silver": "silver",
+          "schema_gold":   "gold"
+        },
+        "source": "WORKSPACE"
+      },
+      "job_cluster_key": "cluster_gpu_prep",
+      "timeout_seconds": 3600
+    },
+    {
+      "task_key": "train_full",
+      "description": "Treino completo com Hyperopt — 50 trials",
+      "depends_on": [
+        { "task_key": "prepare_features" }
+      ],
+      "notebook_task": {
+        "notebook_path": "/Repos/leandro.moraes/databricks-ml-platform/notebooks/ml/01_train_churn_model",
+        "base_parameters": {
+          "catalog":           "lakehouse_prod",
+          "schema_gold":       "gold",
+          "max_trials":        "50",
+          "modelo_nome":       "churn_predictor",
+          "experimento_nome":  "/leandro/churn_xgboost_weekly"
+        },
+        "source": "WORKSPACE"
+      },
+      "job_cluster_key": "cluster_gpu_train",
+      "timeout_seconds": 14400,
+      "max_retries": 1,
+      "min_retry_interval_millis": 600000
+    },
+    {
+      "task_key": "evaluate_and_promote",
+      "description": "Avalia modelo treinado e promove para Staging/Production se AUC melhorou",
+      "depends_on": [
+        { "task_key": "train_full" }
+      ],
+      "notebook_task": {
+        "notebook_path": "/Repos/leandro.moraes/databricks-ml-platform/notebooks/ml/02_evaluate_and_promote",
+        "base_parameters": {
+          "modelo_nome":        "churn_predictor",
+          "min_auc_threshold":  "0.75",
+          "catalog":            "lakehouse_prod",
+          "schema_gold":        "gold"
+        },
+        "source": "WORKSPACE"
+      },
+      "job_cluster_key": "cluster_gpu_prep",
+      "timeout_seconds": 1800
+    }
+  ],
+  "job_clusters": [
+    {
+      "job_cluster_key": "cluster_gpu_train",
+      "new_cluster": {
+        "spark_version":    "14.3.x-gpu-ml-scala2.12",
+        "node_type_id":     "Standard_NC6s_v3",
+        "num_workers":      4,
+        "driver_node_type_id": "Standard_NC6s_v3",
+        "azure_attributes": {
+          "availability":    "ON_DEMAND_AZURE"
+        },
+        "spark_env_vars": {
+          "MLFLOW_EXPERIMENT_NAME": "/leandro/churn_xgboost_weekly"
+        },
+        "spark_conf": {
+          "spark.databricks.delta.preview.enabled": "true",
+          "spark.task.cpus":                        "4"
+        },
+        "custom_tags": {
+          "JobType":    "ml-gpu-training",
+          "CostCenter": "ml-engineering"
+        }
+      }
+    },
+    {
+      "job_cluster_key": "cluster_gpu_prep",
+      "new_cluster": {
+        "spark_version": "14.3.x-cpu-ml-scala2.12",
+        "node_type_id":  "Standard_DS4_v2",
+        "num_workers":   2,
+        "azure_attributes": {
+          "availability":       "SPOT_WITH_FALLBACK_AZURE",
+          "first_on_demand":    1
+        },
+        "custom_tags": {
+          "JobType": "ml-prep"
+        }
+      }
+    }
+  ],
+  "format": "MULTI_TASK",
+  "git_source": {
+    "git_url":      "https://github.com/leandroninja/databricks-ml-platform-three-clouds",
+    "git_provider": "gitHub",
+    "git_branch":   "main"
+  },
+  "parameters": [
+    {
+      "name":    "run_date",
+      "default": "{{job.start_time.iso_date}}"
+    }
+  ]
+}

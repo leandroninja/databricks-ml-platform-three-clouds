@@ -47,12 +47,18 @@ resource "google_storage_bucket" "lakehouse" {
   # lifecycle rule: move objetos +30 dias para Nearline, +90 para Coldline
   lifecycle_rule {
     condition { age = 30 }
-    action { type = "SetStorageClass"; storage_class = "NEARLINE" }
+    action {
+      type          = "SetStorageClass"
+      storage_class = "NEARLINE"
+    }
   }
 
   lifecycle_rule {
     condition { age = 90 }
-    action { type = "SetStorageClass"; storage_class = "COLDLINE" }
+    action {
+      type          = "SetStorageClass"
+      storage_class = "COLDLINE"
+    }
   }
 
   # encriptação com CMEK (Customer Managed Encryption Key)

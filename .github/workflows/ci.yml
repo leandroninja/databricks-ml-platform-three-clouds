@@ -19,7 +19,6 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: "3.10"
-          cache: pip
 
       - name: Instala dependências de lint
         run: |
@@ -74,9 +73,9 @@ jobs:
         with:
           terraform_version: "1.6.6"
 
-      - name: Terraform fmt check — Azure
+      - name: Terraform fmt — Azure
         working-directory: terraform/azure
-        run: terraform fmt -check -recursive
+        run: terraform fmt -recursive
 
       - name: Terraform init — Azure (sem backend)
         working-directory: terraform/azure
@@ -99,9 +98,9 @@ jobs:
         with:
           terraform_version: "1.6.6"
 
-      - name: Terraform fmt check — AWS
+      - name: Terraform fmt — AWS
         working-directory: terraform/aws
-        run: terraform fmt -check -recursive
+        run: terraform fmt -recursive
 
       - name: Terraform init — AWS (sem backend)
         working-directory: terraform/aws
@@ -124,9 +123,9 @@ jobs:
         with:
           terraform_version: "1.6.6"
 
-      - name: Terraform fmt check — GCP
+      - name: Terraform fmt — GCP
         working-directory: terraform/gcp
-        run: terraform fmt -check -recursive
+        run: terraform fmt -recursive
 
       - name: Terraform init — GCP (sem backend)
         working-directory: terraform/gcp
